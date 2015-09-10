@@ -1,0 +1,37 @@
+# change veritas user password
+
+---
+- hosts: VERITAS
+  gather_facts: no
+  remote_user: root
+
+  vars_prompt:
+    - name: "veritas_name"
+      prompt: "Please enter your existing vcs username"
+      private: no
+
+    - name: "veritas_pw"
+      prompt: "Please enter new password for vcs login"
+      private: yes
+      confirm: yes
+
+  tasks:
+
+  - name: "make veritas conf writeable"
+    command: haconf -makerw
+
+  - name: "generate veritas password hash"
+    command: /opt/VRTSvcs/bin/vcsencrypt -vcs {{veritas_pw}}
+    register: result_pw
+
+  - name: set veritaspw facts from result_pw
+    set_fact: veritaspw={{result_pw.stdout}}
+
+# debug view encrypted pw
+#  - debug: var=result_pw.stdout
+
+  - name: "setting veritas password"
+    command: haclus -modify UserNames -update {{veritas_name}} {{veritaspw}}
+
+  - name: "set veritas conf readonly"
+    command: haconf -dump -makero
