@@ -1,0 +1,3 @@
+[VERITAS]
+server1.example.com:22 ansible_ssh_host=10.0.0.1
+server2.example.com:22 ansible_ssh_host=10.0.0.2
