@@ -20,7 +20,7 @@
     ignore_errors: yes
 
   - name: "vcs | revoke privileges"
-    command:  hauser -delpriv {{veritas_name}} -priv {{veritas_role}}
+    command: hauser -delpriv {{veritas_name}} {{veritas_role}}
 
   - name: "vcs | remove user"
     command:  hauser -delete {{veritas_name}}
