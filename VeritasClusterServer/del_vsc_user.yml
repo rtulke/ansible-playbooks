@@ -1,0 +1,27 @@
+---
+- hosts: VERITAS
+  gather_facts: no
+  remote_user: root
+
+  vars_prompt:
+    - name: "veritas_name"
+      prompt: "Please enter a username to delete."
+      private: no
+
+    - name: "veritas_role"
+      prompt: "Revoke privileges of your selected user e.g. Administrator|Operator|Guest"
+      private: no
+
+  tasks:
+
+  - name: "vsc | make veritas conf writeable"
+    command: haconf -makerw
+
+  - name: "vcs | revoke privileges"
+    command:  hauser -delpriv {{veritas_name}} -priv {{veritas_role}}
+
+  - name: "vcs | remove user"
+    command:  hauser -delete {{veritas_name}}
+
+  - name: "vcs | make veritas conf readable"
+    command: haconf -dump -makero
