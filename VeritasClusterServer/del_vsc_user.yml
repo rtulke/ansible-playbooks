@@ -16,6 +16,8 @@
 
   - name: "vsc | make veritas conf writeable"
     command: haconf -makerw
+    register: result_makerw
+    ignore_errors: yes
 
   - name: "vcs | revoke privileges"
     command:  hauser -delpriv {{veritas_name}} -priv {{veritas_role}}
