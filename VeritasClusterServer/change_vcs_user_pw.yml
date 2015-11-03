@@ -1,5 +1,3 @@
-# change veritas user password
-
 ---
 - hosts: VERITAS
   gather_facts: no
