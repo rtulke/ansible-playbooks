@@ -1,0 +1,11 @@
+---
+- hosts: debian
+  user: root
+
+  tasks:
+
+    - name: "Get Debian Version"
+      shell: cat /etc/debian_version
+      register: result_version
+
+    - debug: var=result_version.stdout
