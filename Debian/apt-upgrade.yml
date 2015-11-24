@@ -1,0 +1,17 @@
+---
+- hosts: debian
+  user: root
+
+  tasks:
+
+    - name: apt | download additional mirror public key
+      shell: wget -O - -q http://apt.bbf.local/debian/mymirror/Release1.gpg |apt-key add -
+
+    - name: apt | add fbb repository to sources.list
+      action: apt_repository repo='deb http://apt.bbf.local/debian/ mymirror/' state=present
+
+    - name: apt | update
+      action: apt update_cache=yes
+
+    - name: apt | upgrade
+      action: apt upgrade=dist force=yes
