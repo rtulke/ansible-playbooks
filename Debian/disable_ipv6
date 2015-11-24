@@ -1,0 +1,30 @@
+---
+- hosts: debiantest
+  gather_facts: yes     # required for os check
+  remote_user: root
+
+  tasks:
+
+  - name: "disable ipv6 on debian"
+    lineinfile:
+      dest=/etc/sysctl.d/disable-ipv6.conf
+      create=yes
+      state=present
+      owner=root
+      group=root
+      mode=0644
+      line="{{item}}"
+
+    with_items:
+      - "## disable IPv6 | by ansible"
+      - "net.ipv6.conf.all.disable_ipv6 = 1"
+      - "net.ipv6.conf.default.disable_ipv6 = 1"
+    when: (ansible_distribution == "Debian" and ansible_distribution_release == "jessie") or
+          (ansible_distribution == "Debian" and ansible_distribution_release == "wheezy")
+    notify: reload sysctl
+    when: true
+
+  handlers:
+
+  - name: reload sysctl
+    shell: "sysctl -p"
