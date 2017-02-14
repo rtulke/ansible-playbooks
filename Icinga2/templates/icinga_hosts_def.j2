@@ -1,10 +1,12 @@
 ## {{ ansible_managed }}
 
-define host {
- use generic-host
- host_name {{ hostvars[host]['ansible_fqdn'] }}
- address {{ hostvars[host]['ansible_eth0']['ipv4']['address'] }}
- max_check_attempts 5
- check_command check-host-alive
- contact_groups admins
+object Host "{{ hostvars[hostitem]['ansible_fqdn'] }}" {
+  import "generic-host"
+  address = "{{ hostvars[hostitem]['ansible_default_ipv4']['address'] }}"
+  vars.os = "Linux"
+  vars.sla = "24x7"
+  vars.type = "cn"
+
+  vars.disks["disk"] = {
+  }
 }
