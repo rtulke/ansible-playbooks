@@ -1,0 +1,10 @@
+{% for host in groups['myservergroup'] %}
+define host {
+ use generic-host
+ host_name {{ hostvars[host]['ansible_fqdn'] }}
+ address {{ hostvars[host]['ansible_eth0']['ipv4']['address'] }}
+ max_check_attempts 5
+ check_command check-host-alive
+ contact_groups admins
+}
+{% endfor %}
