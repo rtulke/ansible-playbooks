@@ -1,7 +1,7 @@
 ---
 
 ## run on icinga2 master
-- hosts: icinga2-master-server.localdomain.tld
+- hosts: icinga-master.yourdomain.net
 
   tasks:
 
@@ -15,15 +15,13 @@
 
   vars:
     ## icinga basics
-    # replace all icinga2-master-server.localdomain.tld with your own
-    # replace rhn_user and rhn_password with your own
-    master_hostname: icinga2-master-server.localdomain.tld
-    master_ip: "{{ hostvars['icinga2-master-server.localdomain.tld']['ansible_default_ipv4']['address'] }}"
+    master_hostname: icinga-master.yourdomain.net
+    master_ip: "{{ hostvars['icinga-master.yourdomain.net']['ansible_default_ipv4']['address'] }}"
     master_port: 5665
 
     ## rhn (RHN, Satellite, Spacewalk Credentials)
-    rhn_user: YourUserName
-    rhn_password: YourPassword
+    rhn_user: <your red hat user here>
+    rhn_password: <your password>
     rhn_channel: icinga-epel-7
 
   tasks:
@@ -50,7 +48,8 @@
       - icinga2 
       - icinga2-bin
       - icinga2-common
-      
+    
+  
   ## prepare pki on client side
   - name: create pki folder
     file: path=/etc/icinga2/pki state=directory mode=0700 owner=icinga group=icinga
@@ -62,10 +61,10 @@
     shell: icinga2 pki save-cert --key /etc/icinga2/pki/{{ hostitem }}.key --cert /etc/icinga2/pki/{{ hostitem }}.crt --trustedcert /etc/icinga2/pki/trusted-master.crt --host {{ master_hostname }}
 
   - name: request the certificate from the icinga server
-    shell: "icinga2 pki request --host {{ master_hostname }} --port {{ master_port }} --ticket {{ hostvars['icinga2-master-server.localdomain.tld']['ticket']['stdout'] }} --key /etc/icinga2/pki/{{ hostitem }}.key --cert /etc/icinga2/pki/{{ hostitem }}.crt --trustedcert /etc/icinga2/pki/trusted-master.crt --ca /etc/icinga2/pki/ca.key"
+    shell: "icinga2 pki request --host {{ master_hostname }} --port {{ master_port }} --ticket {{ hostvars['icinga-master.yourdomain.net']['ticket']['stdout'] }} --key /etc/icinga2/pki/{{ hostitem }}.key --cert /etc/icinga2/pki/{{ hostitem }}.crt --trustedcert /etc/icinga2/pki/trusted-master.crt --ca /etc/icinga2/pki/ca.key"
 
   - name: node setup
-    shell: "icinga2 node setup --ticket {{ hostvars['hcm2icinga.sharedtcs.net']['ticket']['stdout'] }} --endpoint {{ master_hostname }} --zone {{ hostitem }} --master_host {{ master_hostname }} --trustedcert /etc/icinga2/pki/trusted-master.crt --cn {{ hostitem }}"
+    shell: "icinga2 node setup --ticket {{ hostvars['icinga-master.yourdomain.net']['ticket']['stdout'] }} --endpoint {{ master_hostname }} --zone {{ hostitem }} --master_host {{ master_hostname }} --trustedcert /etc/icinga2/pki/trusted-master.crt --cn {{ hostitem }}"
 
   ## enabled and start incinga2 service on client side
   - name: icinga service enabled and start
@@ -77,7 +76,7 @@
       - icinga2-restart 
 
 ## run on icinga2 master
-- hosts: icinga2-master-server.localdomain.tld 
+- hosts: icinga-master.yourdomain.net
 
   vars:
     client_port: 5665
@@ -90,11 +89,22 @@
   - name: set host ip
     shell: icinga2 node set {{ hostitem }} --host {{ hostitem }} --port {{ client_port }}
 
-  - name: copy host definition to icinga master
+  - name: create hosts subfolder
+    file: path=/etc/icinga2/conf.d/hosts state=directory mode=0750 owner=icinga group=icinga
+
+  - name: copy host definition to icinga master hosts subfolder
     template: src=templates/icinga_hosts_def.j2
-      dest=/etc/icinga/servers/myservergroup.cfg
-      owner=root
-      group=root
+      dest=/etc/icinga2/conf.d/hosts/{{ hostitem }}.conf
+      owner=icinga
+      group=icinga
       mode=0644
-    notify:
-    - restart icinga2
+    tags:
+      - deploy-hostfile
+
+  - name: reload icinga2
+    systemd:
+      name: icinga2
+      state: restarted
+      enabled: yes
+    tags:
+      - deploy-hostfile
