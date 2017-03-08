@@ -1,0 +1,62 @@
+# vim:set tabstop=2 softtabstop=2 shiftwidth=2 expandtab:
+---
+- hosts: all
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: yes
+
+  vars:
+    rhn_channel7: icinga-epel-7
+    rhn_channel6: icinga-epel-7
+
+  vars_prompt:
+    - name: rhn_user
+      prompt: "Please enter your RHN (Red Hat Satellite) User"
+      private: no
+
+    - name: rhn_password
+      prompt: "Please enter your RHN (Red Hat Satellite) Password"
+      private: yes
+
+  tasks:
+
+  - name: check if repo is already there
+    shell: rhn-channel -l | grep -Fxq {{ rhn_channel7 }} 
+    register: rhn_status
+    ignore_errors: True
+    changed_when: False
+    when:
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "7"
+    tags:
+      - rhn-check7
+      
+  - name: check if repo is already there
+    shell: rhn-channel -l | grep -Fxq {{ rhn_channel6 }} 
+    register: rhn_status
+    ignore_errors: True
+    changed_when: False
+    when:
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "6"
+    tags:
+      - rhn-check6
+      
+  - name: add rhn icinga-epel-7 channel
+    command: /usr/sbin/rhn-channel -a -c "{{ rhn_channel7 }}" -u "{{ rhn_user }}" -p "{{rhn_password}}"
+    when: 
+      - rhn_status.rc == 1
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "7"
+    tags:
+      - rhn-check7
+
+ - name: add rhn icinga-epel-6 channel
+    command: /usr/sbin/rhn-channel -a -c "{{ rhn_channel6 }}" -u "{{ rhn_user }}" -p "{{rhn_password}}"
+    when: 
+      - rhn_status.rc == 1
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "7"
+    tags:
+      - rhn-check6
