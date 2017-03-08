@@ -8,7 +8,7 @@
 
   vars:
     rhn_channel7: icinga-epel-7
-    rhn_channel6: icinga-epel-7
+    rhn_channel6: icinga-epel-6
 
   vars_prompt:
     - name: rhn_user
