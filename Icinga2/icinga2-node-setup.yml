@@ -1,11 +1,10 @@
 ---
 
-## run on icinga2 master
-- hosts: icinga-master.yourdomain.net
+- hosts: icinga-master.domain.tld
 
   tasks:
 
-  ## it is important that first we generate new ticket for the icinga client on master
+  ## it is important that we generate new ticket first for the icinga client on master
   - name: generate ticket on the icinga master and save it as a variable
     shell: /usr/lib64/icinga2/sbin/icinga2 pki ticket --cn {{ hostitem }}
     register: ticket
@@ -13,22 +12,29 @@
 ## run on icinga2 client host comes from parameter...
 - hosts: "{{ hostitem }}"
 
-  vars:
-    ## icinga basics
-    master_hostname: icinga-master.yourdomain.net
-    master_ip: "{{ hostvars['icinga-master.yourdomain.net']['ansible_default_ipv4']['address'] }}"
-    master_port: 5665
+  vars_prompt:
 
-    ## rhn (RHN, Satellite, Spacewalk Credentials)
-    rhn_user: <your red hat user here>
-    rhn_password: <your password>
-    rhn_channel: icinga-epel-7
+    - name: rhn_user
+      prompt: "Please enter your rhn username"
+      private: no
+
+    - name: rhn_password
+      prompt: "Please enter your rhn password"
+      private: yes
+
+
+  vars:
+
+    ## icinga basics
+    master_hostname: icinga-master.domain.tld
+    master_ip: "{{ hostvars['icinga-master.domain.tld']['ansible_default_ipv4']['address'] }}"
+    master_port: 5665
 
   tasks:
 
   ## prepare icinga setup
   - name: check if repo|rhn channel is already there
-    shell: rhn-channel -l | grep -Fxq "{{ rhn_channel }}" 
+    shell: rhn-channel -l | grep -Fxq icinga-epel- 
     register: rhn_status
     ignore_errors: True
     changed_when: False
@@ -36,8 +42,20 @@
       - rhn-check
 
   - name: add rhn icinga-epel-7 channel
-    command: /usr/sbin/rhn-channel -a -c "{{ rhn_channel }}" -u "{{ rhn_user }}" -p "{{rhn_password}}"
-    when: rhn_status.rc == 1
+    command: /usr/sbin/rhn-channel -a -c icinga-epel-7 -u "{{ rhn_user }}" -p "{{rhn_password}}"
+    when: 
+      - rhn_status.rc == 1
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "7"
+    tags:
+      - rhn-check
+
+  - name: add rhn icinga-epel-6 channel
+    command: /usr/sbin/rhn-channel -a -c icinga-epel-6 -u "{{ rhn_user }}" -p "{{rhn_password}}"
+    when: 
+      - rhn_status.rc == 1
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "6"
     tags:
       - rhn-check
 
@@ -49,7 +67,14 @@
       - icinga2-bin
       - icinga2-common
     
-  
+  ## prepare sudo rights
+  - name: add sudoers
+    lineinfile:
+      dest: /etc/sudoers
+      state: present
+      line: 'icinga ALL=NOPASSWD: /opt/MegaRAID/storcli/storcli64'
+      validate: visudo -cf %s 
+
   ## prepare pki on client side
   - name: create pki folder
     file: path=/etc/icinga2/pki state=directory mode=0700 owner=icinga group=icinga
@@ -61,22 +86,58 @@
     shell: icinga2 pki save-cert --key /etc/icinga2/pki/{{ hostitem }}.key --cert /etc/icinga2/pki/{{ hostitem }}.crt --trustedcert /etc/icinga2/pki/trusted-master.crt --host {{ master_hostname }}
 
   - name: request the certificate from the icinga server
-    shell: "icinga2 pki request --host {{ master_hostname }} --port {{ master_port }} --ticket {{ hostvars['icinga-master.yourdomain.net']['ticket']['stdout'] }} --key /etc/icinga2/pki/{{ hostitem }}.key --cert /etc/icinga2/pki/{{ hostitem }}.crt --trustedcert /etc/icinga2/pki/trusted-master.crt --ca /etc/icinga2/pki/ca.key"
+    shell: "icinga2 pki request --host {{ master_hostname }} --port {{ master_port }} --ticket {{ hostvars['hcm2icinga.sharedtcs.net']['ticket']['stdout'] }} --key /etc/icinga2/pki/{{ hostitem }}.key --cert /etc/icinga2/pki/{{ hostitem }}.crt --trustedcert /etc/icinga2/pki/trusted-master.crt --ca /etc/icinga2/pki/ca.key"
 
   - name: node setup
-    shell: "icinga2 node setup --ticket {{ hostvars['icinga-master.yourdomain.net']['ticket']['stdout'] }} --endpoint {{ master_hostname }} --zone {{ hostitem }} --master_host {{ master_hostname }} --trustedcert /etc/icinga2/pki/trusted-master.crt --cn {{ hostitem }}"
+    shell: "icinga2 node setup --ticket {{ hostvars['hcm2icinga.sharedtcs.net']['ticket']['stdout'] }} --endpoint {{ master_hostname }} --zone {{ hostitem }} --master_host {{ master_hostname }} --trustedcert /etc/icinga2/pki/trusted-master.crt --cn {{ hostitem }}"
+
+  ## zone definitions
+  - name: copy client zone definition 
+    template: src=templates/icinga_zones.j2
+      dest=/etc/icinga2/zones.conf
+      owner=icinga
+      group=icinga
+      mode=0644
+    tags:
+      - deploy-hostfile
+
+  - name: enable zone commands
+    shell: icinga2 feature enable command
+
+  - name: comment out conf.d 
+    replace:
+      dest: /etc/icinga2/icinga2.conf
+      regexp: '^include_recursive "conf.d"'
+      replace: '//include_recursive "conf.d"'
+
 
   ## enabled and start incinga2 service on client side
-  - name: icinga service enabled and start
+  - name: icinga service on rhel7 enabled and start
     systemd:
       name: icinga2
       state: restarted
       enabled: yes
+    when: 
+      - rhn_status.rc == 1
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "7"
+    tags:
+      - icinga2-restart 
+        
+  - name: icinga service on rhel6 enabled and start
+    service:
+      name: icinga2
+      state: restarted
+      enabled: yes
+    when: 
+      - rhn_status.rc == 1
+      - ansible_distribution == "RedHat"
+      - ansible_distribution_major_version == "6"
     tags:
       - icinga2-restart 
 
 ## run on icinga2 master
-- hosts: icinga-master.yourdomain.net
+- hosts: icinga-master.domain.tld 
 
   vars:
     client_port: 5665
@@ -101,6 +162,48 @@
     tags:
       - deploy-hostfile
 
+  - name: check  
+    shell: cat /etc/icinga2/zones_endpoints.conf | grep -q "{{ hostitem }}" 
+    register: zone_check
+    ignore_errors: True
+    changed_when: False
+    tags:
+      - zone
+
+  - name: modify zones.conf
+    lineinfile:
+      dest: /etc/icinga2/zones.conf
+      state: present
+      line: 'include "/etc/icinga2/zones_endpoints.conf"'
+      insertafter: EOF
+    tags:
+      - zone
+
+
+  - name: add client zone to zones_endpoints.conf
+    lineinfile:
+      dest: /etc/icinga2/zones_endpoints.conf
+      regexp: '(^.*endpoints.*") ]'
+      backrefs: yes
+      line: '\1, "{{hostitem}}" ]'
+    when: zone_check.rc == 1
+    tags:
+      - zone
+
+  - name: add host endpoint
+    blockinfile:
+      dest: /etc/icinga2/zones_endpoints.conf
+      marker: "# {mark} ANSIBLE MANAGED BLOCK {{ hostitem }}"
+      block: |
+        object Endpoint "{{ hostitem }}" {
+                 host = "{{ hostitem }}"
+        }
+      insertafter: EOF
+    when: zone_check.rc == 1
+    tags:
+      - zone
+
+
   - name: reload icinga2
     systemd:
       name: icinga2
@@ -108,3 +211,4 @@
       enabled: yes
     tags:
       - deploy-hostfile
+      - zone
