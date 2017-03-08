@@ -1,0 +1,23 @@
+## {{ ansible_managed }}
+
+object Endpoint "icinga-master.domain.tld" {
+    host = "icinga-master.domain.tld"
+    port = "5665"
+}
+
+object Endpoint "{{ hostvars[hostitem]['ansible_fqdn'] }}" {
+    host = "{{ hostvars[hostitem]['ansible_fqdn'] }}"
+}
+
+object Zone "master" {
+    endpoints = [ "icinga-master.domain.tld" ]
+}
+
+object Zone "{{ hostvars[hostitem]['ansible_fqdn'] }}" {
+    endpoints = [ "{{ hostvars[hostitem]['ansible_fqdn'] }}" ]
+    parent = "master"
+}
+
+object Zone "global-templates" {
+    global = true
+}
